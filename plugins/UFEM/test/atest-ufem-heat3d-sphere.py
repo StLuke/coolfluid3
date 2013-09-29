@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 import coolfluid as cf
 
@@ -20,14 +22,14 @@ solver = model.create_solver('cf3.UFEM.Solver')
 hc = solver.add_direct_solver('cf3.UFEM.HeatConductionSteady')
 
 # Generate a channel mesh
-mesh = domain.load_mesh(file = cf.URI(sys.argv[1]), name = 'Mesh')
+mesh = domain.load_mesh(file=cf.URI(sys.argv[1]), name='Mesh')
 
 hc.options().set('regions', [mesh.access_component('topology').uri()])
 
 # Boundary conditions
 bc = hc.get_child('BoundaryConditions')
-bc.add_constant_bc(region_name = 'inner', variable_name = 'Temperature')
-bc.add_constant_bc(region_name = 'outer', variable_name = 'Temperature')
+bc.add_constant_bc(region_name='inner', variable_name='Temperature')
+bc.add_constant_bc(region_name='outer', variable_name='Temperature')
 bc.get_child('BCinnerTemperature').options().set('value', 10)
 bc.get_child('BCouterTemperature').options().set('value', 35)
 

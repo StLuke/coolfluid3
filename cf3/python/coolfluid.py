@@ -1,8 +1,8 @@
 import sys
 if sys.version_info < (2, 5):
-  import dl
+    import dl
 else:
-  import ctypes as dl
+    import ctypes as dl
 # This is needed to get MPI symbols to be visible
 flags = sys.getdlopenflags()
 sys.setdlopenflags(flags | dl.RTLD_GLOBAL)
@@ -16,9 +16,10 @@ from check import *
 # restore the dlopen flags to default
 sys.setdlopenflags(flags)
 
-#initiate the CF3 environment. Note: there is no argv if executed from the ScriptEngine
-if sys.__dict__.has_key('argv'):
-  Core.initiate(sys.argv)
+#initiate the CF3 environment.
+#Note: there is no argv if executed from the ScriptEngine
+if 'argv' in sys.__dict__:
+    Core.initiate(sys.argv)
 
 # shortcut for root
 root = Core.root()
@@ -31,4 +32,3 @@ libs = Core.libraries()
 
 # shortcut for tools
 tools = Core.tools()
-

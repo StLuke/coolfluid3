@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import coolfluid as cf
 import sys
 
@@ -9,8 +11,8 @@ solver = model.create_solver('cf3.solver.SimpleSolver')
 phys_model = model.create_physics('cf3.physics.DynamicModel')
 
 if domain.name() != 'Domain':
-  raise Exception('Failed to create domain')
+    raise Exception('Failed to create domain')
 if solver.name() != 'SimpleSolver':
-  raise Exception('Failed to create solver')
+    raise Exception('Failed to create solver')
 if phys_model.name() != 'DynamicModel':
-  raise Exception('Failed to create physics')
+    raise Exception('Failed to create physics')

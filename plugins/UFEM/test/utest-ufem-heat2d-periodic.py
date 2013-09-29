@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 import coolfluid as cf
 
@@ -17,28 +19,29 @@ solver = model.create_solver('cf3.UFEM.Solver')
 hc = solver.add_direct_solver('cf3.UFEM.HeatConductionSteady')
 
 # load the mesh (passed as first argument to the script)
-mesh = domain.create_component('mesh','cf3.mesh.Mesh')
+mesh = domain.create_component('mesh', 'cf3.mesh.Mesh')
 
 blocks = domain.create_component('model', 'cf3.mesh.BlockMesh.BlockArrays')
-points = blocks.create_points(dimensions = 2, nb_points = 4)
-points[0]  = [0., 0.]
-points[1]  = [1., 0.]
-points[2]  = [1., 1.]
-points[3]  = [0., 1.]
+points = blocks.create_points(dimensions=2, nb_points=4)
+points[0] = [0., 0.]
+points[1] = [1., 0.]
+points[2] = [1., 1.]
+points[3] = [0., 1.]
 block_nodes = blocks.create_blocks(1)
 block_nodes[0] = [0, 1, 2, 3]
 block_subdivs = blocks.create_block_subdivisions()
-block_subdivs[0] = [20,20]
+block_subdivs[0] = [20, 20]
 gradings = blocks.create_block_gradings()
 gradings[0] = [1., 1., 1., 1.]
-blocks.create_patch_nb_faces(name = 'bottom', nb_faces = 1)[0] = [0, 1]
-blocks.create_patch_nb_faces(name = 'right', nb_faces = 1)[0] = [1, 2]
-blocks.create_patch_nb_faces(name = 'top', nb_faces = 1)[0] = [2, 3]
-blocks.create_patch_nb_faces(name = 'left', nb_faces = 1)[0] = [3, 0]
-blocks.partition_blocks(nb_partitions = 4, direction = 1)
+blocks.create_patch_nb_faces(name='bottom', nb_faces=1)[0] = [0, 1]
+blocks.create_patch_nb_faces(name='right', nb_faces=1)[0] = [1, 2]
+blocks.create_patch_nb_faces(name='top', nb_faces=1)[0] = [2, 3]
+blocks.create_patch_nb_faces(name='left', nb_faces=1)[0] = [3, 0]
+blocks.partition_blocks(nb_partitions=4, direction=1)
 blocks.create_mesh(mesh.uri())
 
-partitioner = domain.create_component('Partitioner', 'cf3.mesh.actions.PeriodicMeshPartitioner')
+partitioner = domain.create_component(
+    'Partitioner', 'cf3.mesh.actions.PeriodicMeshPartitioner')
 partitioner.mesh = mesh
 
 link_horizontal = partitioner.create_link_periodic_nodes()
@@ -50,7 +53,8 @@ partitioner.execute()
 # link_horizontal.mesh = mesh
 # link_horizontal.execute()
 
-make_par_data = domain.create_component('MakeParData', 'cf3.solver.actions.ParallelDataToFields')
+make_par_data = domain.create_component(
+    'MakeParData', 'cf3.solver.actions.ParallelDataToFields')
 make_par_data.mesh = mesh
 make_par_data.execute()
 
@@ -68,8 +72,10 @@ writer.execute()
 # Boundary conditions
 bc = hc.BoundaryConditions
 bc.regions = [mesh.topology.uri()]
-bc.add_constant_bc(region_name = 'bottom', variable_name = 'Temperature').value = 10
-bc.add_constant_bc(region_name = 'top', variable_name = 'Temperature').value = 30
+bc.add_constant_bc(
+    region_name='bottom', variable_name='Temperature').value = 10
+bc.add_constant_bc(
+    region_name='top', variable_name='Temperature').value = 30
 
 # run the simulation
 model.simulate()

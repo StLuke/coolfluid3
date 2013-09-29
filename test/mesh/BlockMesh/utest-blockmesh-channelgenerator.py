@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import coolfluid as cf
 import sys
 
@@ -14,7 +16,8 @@ env.options().set('exception_outputs', False)
 model = root.create_component('model', 'cf3.solver.Model')
 model.create_domain()
 domain = model.get_child('Domain')
-generator = domain.create_component('generator', 'cf3.mesh.BlockMesh.ChannelGenerator')
+generator = domain.create_component(
+    'generator', 'cf3.mesh.BlockMesh.ChannelGenerator')
 generator.options().set('mesh', cf.URI('//model/Domain/mesh'))
 
 generator.options().set('x_segments', 64)

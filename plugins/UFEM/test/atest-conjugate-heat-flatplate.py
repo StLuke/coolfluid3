@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 # sys.path.append('/data/scholl/coolfluid3/build/dso')
 import coolfluid as cf
@@ -34,21 +36,21 @@ nstokes = solver.add_unsteady_solver('cf3.UFEM.NavierStokes')
 
 # Generate mesh
 blocks = domain.create_component('blocks', 'cf3.mesh.BlockMesh.BlockArrays')
-points = blocks.create_points(dimensions = 2, nb_points = 14)
-points[0]  = [0, 0.]
-points[1]  = [1, 0.]
-points[2]  = [0.,0.2]
-points[3]  = [1, 0.2]
-points[4]  = [0.,2.1]
-points[5]  = [1, 2.2]
+points = blocks.create_points(dimensions=2, nb_points=14)
+points[0] = [0, 0.]
+points[1] = [1, 0.]
+points[2] = [0., 0.2]
+points[3] = [1, 0.2]
+points[4] = [0., 2.1]
+points[5] = [1, 2.2]
 
-points[6]  = [2.,0.]
-points[7]  = [2, 0.2]
-points[8]  = [2, 2.3]
+points[6] = [2., 0.]
+points[7] = [2, 0.2]
+points[8] = [2, 2.3]
 
-points[9]  = [-1.,0.]
-points[10]  = [-1, 0.2]
-points[11]  = [-1, 2.]
+points[9] = [-1., 0.]
+points[10] = [-1, 0.2]
+points[11] = [-1, 2.]
 
 points[12] = [0, -1.]
 points[13] = [1., -1]
@@ -84,48 +86,57 @@ gradings[5] = [1., 1., 10., 10.]
 gradings[6] = [1., 1., 1., 1.]
 
 # fluid block
-inlet_patch = blocks.create_patch_nb_faces(name = 'inlet', nb_faces = 2)
+inlet_patch = blocks.create_patch_nb_faces(name='inlet', nb_faces=2)
 inlet_patch[0] = [10, 9]
 inlet_patch[1] = [11, 10]
 
-bottom_patch1 = blocks.create_patch_nb_faces(name = 'solid_bottom', nb_faces = 1)
+bottom_patch1 = blocks.create_patch_nb_faces(
+    name='solid_bottom', nb_faces=1)
 bottom_patch1[0] = [12, 13]
 
-bottom_patch1 = blocks.create_patch_nb_faces(name = 'solid_left', nb_faces = 1)
+bottom_patch1 = blocks.create_patch_nb_faces(name='solid_left', nb_faces=1)
 bottom_patch1[0] = [0, 12]
 
-bottom_patch1 = blocks.create_patch_nb_faces(name = 'solid_right', nb_faces = 1)
+bottom_patch1 = blocks.create_patch_nb_faces(
+    name='solid_right', nb_faces=1)
 bottom_patch1[0] = [13, 1]
 
-bottom_patch2 = blocks.create_patch_nb_faces(name = 'bottom2', nb_faces = 1)
+bottom_patch2 = blocks.create_patch_nb_faces(name='bottom2', nb_faces=1)
 bottom_patch2[0] = [1, 6]
 
-bottom_patch3 = blocks.create_patch_nb_faces(name = 'bottom3', nb_faces = 1)
+bottom_patch3 = blocks.create_patch_nb_faces(name='bottom3', nb_faces=1)
 bottom_patch3[0] = [9, 0]
 
-outlet_patch = blocks.create_patch_nb_faces(name = 'outlet', nb_faces = 2)
+outlet_patch = blocks.create_patch_nb_faces(name='outlet', nb_faces=2)
 outlet_patch[0] = [6, 7]
 outlet_patch[1] = [7, 8]
 
-top_patch = blocks.create_patch_nb_faces(name = 'top', nb_faces = 3)
+top_patch = blocks.create_patch_nb_faces(name='top', nb_faces=3)
 top_patch[0] = [5, 4]
 top_patch[1] = [8, 5]
 top_patch[2] = [4, 11]
 
-blocks.options().set('block_regions', ['fluid', 'fluid', 'fluid', 'fluid', 'fluid', 'fluid', 'solid'])
+blocks.options().set('block_regions', ['fluid', 'fluid', 'fluid', 'fluid',
+                                       'fluid', 'fluid', 'solid'])
 
 mesh = domain.create_component('Mesh', 'cf3.mesh.Mesh')
 blocks.create_mesh(mesh.uri())
 
-# rename the temperature variables, so each temperature has a unique name (needed for mesh writing)
+# rename the temperature variables, so each temperature has a unique name
+# (needed for mesh writing)
 variables = physics.get_child('VariableManager')
-variables.get_child('scalar_advection_solution').options().set('Temperature_variable_name', 'Tadv')
-variables.get_child('heat_conduction_solution').options().set('Temperature_variable_name', 'Tcond')
+variables.get_child('scalar_advection_solution').options(
+    ).set('Temperature_variable_name', 'Tadv')
+variables.get_child('heat_conduction_solution').options(
+    ).set('Temperature_variable_name', 'Tcond')
 
 # For each solver, set the region in which it operates
-nstokes.options().set('regions', [mesh.access_component('topology/fluid').uri()])
-scalaradv.options().set('regions', [mesh.access_component('topology/fluid').uri()])
-heatcond.options().set('regions', [mesh.access_component('topology/solid').uri()])
+nstokes.options(
+    ).set('regions', [mesh.access_component('topology/fluid').uri()])
+scalaradv.options(
+    ).set('regions', [mesh.access_component('topology/fluid').uri()])
+heatcond.options(
+    ).set('regions', [mesh.access_component('topology/solid').uri()])
 
 u_in = [1., 0.]
 u_wall = [0., 0.]
@@ -145,31 +156,54 @@ scalaradv.scalar_coefficient = 1.
 
 # Boundary conditions for Navier-Stokes
 bc = nstokes.get_child('BoundaryConditions')
-bc.options().set('regions', [mesh.access_component('topology').uri()]) # needed to make the lookup work
-bc.add_constant_bc(region_name = 'inlet', variable_name = 'Velocity').options().set('value', u_in)
-bc.add_constant_bc(region_name = 'region_bnd_fluid_solid', variable_name = 'Velocity').options().set('value',  u_wall)
-bc.add_constant_bc(region_name = 'bottom2', variable_name = 'Velocity').options().set('value',  u_wall)
-bc.add_constant_component_bc(region_name = 'bottom3', variable_name = 'Velocity', component = 1).options().set('value',  0.)
-bc.add_constant_bc(region_name = 'outlet', variable_name = 'Pressure').options().set('value', 1.)
-bc.add_constant_bc(region_name = 'top', variable_name = 'Velocity').options().set('value', u_in)
+bc.options().set('regions', [mesh.access_component(
+    'topology').uri()])  # needed to make the lookup work
+bc.add_constant_bc(region_name='inlet',
+                   variable_name='Velocity').options().set('value', u_in)
+bc.add_constant_bc(region_name='region_bnd_fluid_solid',
+                   variable_name='Velocity').options().set('value',  u_wall)
+bc.add_constant_bc(region_name='bottom2',
+                   variable_name='Velocity').options().set('value',  u_wall)
+bc.add_constant_component_bc(region_name='bottom3', variable_name='Velocity',
+                             component=1).options().set('value',  0.)
+bc.add_constant_bc(region_name='outlet',
+                   variable_name='Pressure').options().set('value', 1.)
+bc.add_constant_bc(region_name='top',
+                   variable_name='Velocity').options().set('value', u_in)
 
 # Boundary conditions for ScalarAdvection
 bc = scalaradv.get_child('BoundaryConditions')
-bc.options().set('regions', [mesh.access_component('topology').uri()]) # needed to make the lookup work
-bc.add_constant_bc(region_name = 'inlet', variable_name = 'Temperature').options().set('value', phi_in)
-bc_wall_temp = bc.create_bc_action(region_name = 'region_bnd_fluid_solid', builder_name = 'cf3.UFEM.BCHoldValue')
-bc_wall_temp.set_tags(from_field_tag = 'heat_conduction_solution', to_field_tag = 'scalar_advection_solution', from_variable = 'Temperature', to_variable = 'Temperature')
-bc.add_constant_bc(region_name = 'bottom2', variable_name = 'Temperature').options().set('value',  phi_in)
-bc.add_constant_bc(region_name = 'bottom3', variable_name = 'Temperature').options().set('value',  phi_in)
-bc.add_constant_bc(region_name = 'top', variable_name = 'Temperature').options().set('value', phi_in)
+bc.options().set('regions', [mesh.access_component(
+    'topology').uri()])  # needed to make the lookup work
+bc.add_constant_bc(region_name='inlet', variable_name='Temperature').options(
+    ).set('value', phi_in)
+bc_wall_temp = bc.create_bc_action(region_name='region_bnd_fluid_solid',
+                                   builder_name='cf3.UFEM.BCHoldValue')
+bc_wall_temp.set_tags(
+    from_field_tag='heat_conduction_solution',
+    to_field_tag='scalar_advection_solution',
+    from_variable='Temperature',
+    to_variable='Temperature')
+bc.add_constant_bc(region_name='bottom2', variable_name='Temperature').options(
+    ).set('value',  phi_in)
+bc.add_constant_bc(region_name='bottom3', variable_name='Temperature').options(
+    ).set('value',  phi_in)
+bc.add_constant_bc(region_name='top', variable_name='Temperature').options(
+    ).set('value', phi_in)
 
 # Boundary conditions for HeatConduction
 bc = heatcond.get_child('BoundaryConditions')
-bc.options().set('regions', [mesh.access_component('topology').uri()]) # needed to make the lookup work
-heat_coupling = bc.create_bc_action(region_name = 'region_bnd_fluid_solid', builder_name = 'cf3.UFEM.HeatCouplingFlux')
-heat_coupling.options().set('gradient_region', mesh.access_component('topology/fluid'))
-heat_coupling.options().set('temperature_field_tag', 'scalar_advection_solution')
-bc.add_constant_bc(region_name = 'solid_bottom', variable_name = 'Temperature').options().set('value',  phi_wall)
+bc.options().set('regions', [mesh.access_component(
+    'topology').uri()])  # needed to make the lookup work
+heat_coupling = bc.create_bc_action(region_name='region_bnd_fluid_solid',
+                                    builder_name='cf3.UFEM.HeatCouplingFlux')
+heat_coupling.options(
+    ).set('gradient_region', mesh.access_component('topology/fluid'))
+heat_coupling.options(
+    ).set('temperature_field_tag', 'scalar_advection_solution')
+bc.add_constant_bc(
+    region_name='solid_bottom',
+    variable_name='Temperature').options().set('value',  phi_wall)
 
 # Time setup
 time = model.create_time()
@@ -185,7 +219,8 @@ solver.TimeLoop.CouplingIteration.options.max_iter = 10
 solver.create_fields()
 
 # must be after create_fields
-probe0 = solver.add_probe(name = 'Probe', parent = scalaradv, dict = mesh.children['cf3.mesh.LagrangeP0'])
+probe0 = solver.add_probe(name='Probe', parent=scalaradv,
+                          dict=mesh.children['cf3.mesh.LagrangeP0'])
 probe0.Log.variables = ['TemperatureGradient[0]', 'TemperatureGradient[1]']
 probe0.coordinate = [0.5, 0.5]
 probe0.History.file = cf.URI('grad_t.tsv')
@@ -193,13 +228,14 @@ probe0.History.file = cf.URI('grad_t.tsv')
 solver.InitialConditions.execute()
 domain.write_mesh(cf.URI('atest-conjugate-heat-flatplate_output-initial.pvtu'))
 while current_end_time < final_end_time:
-  current_end_time += save_interval
-  time.options().set('end_time', current_end_time)
-  model.simulate()
-  domain.write_mesh(cf.URI('atest-cht-flatplate_10-iterations-' +str(iteration) + '.pvtu'))
-  iteration += 1
-  if iteration == 1:
-    solver.options().set('disabled_actions', ['InitialConditions'])
+    current_end_time += save_interval
+    time.options().set('end_time', current_end_time)
+    model.simulate()
+    domain.write_mesh(cf.URI(
+        'atest-cht-flatplate_10-iterations-' + str(iteration) + '.pvtu'))
+    iteration += 1
+    if iteration == 1:
+        solver.options().set('disabled_actions', ['InitialConditions'])
 
 # print timings
 model.print_timing_tree()

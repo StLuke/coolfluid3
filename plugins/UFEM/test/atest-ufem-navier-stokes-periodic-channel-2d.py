@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 import coolfluid as cf
 
@@ -23,13 +25,13 @@ ns_solver = solver.add_unsteady_solver('cf3.UFEM.NavierStokes')
 
 # Generate mesh
 blocks = domain.create_component('blocks', 'cf3.mesh.BlockMesh.BlockArrays')
-points = blocks.create_points(dimensions = 2, nb_points = 6)
-points[0]  = [0, 0.]
-points[1]  = [10., 0.]
-points[2]  = [0., 0.5]
-points[3]  = [10., 0.5]
-points[4]  = [0.,1.]
-points[5]  = [10., 1.]
+points = blocks.create_points(dimensions=2, nb_points=6)
+points[0] = [0, 0.]
+points[1] = [10., 0.]
+points[2] = [0., 0.5]
+points[3] = [10., 0.5]
+points[4] = [0., 1.]
+points[5] = [10., 1.]
 
 block_nodes = blocks.create_blocks(2)
 block_nodes[0] = [0, 1, 3, 2]
@@ -44,26 +46,27 @@ gradings = blocks.create_block_gradings()
 gradings[0] = [1., 1., grading, grading]
 gradings[1] = [1., 1., 1./grading, 1./grading]
 
-left_patch = blocks.create_patch_nb_faces(name = 'left', nb_faces = 2)
+left_patch = blocks.create_patch_nb_faces(name='left', nb_faces=2)
 left_patch[0] = [2, 0]
 left_patch[1] = [4, 2]
 
-bottom_patch = blocks.create_patch_nb_faces(name = 'bottom', nb_faces = 1)
+bottom_patch = blocks.create_patch_nb_faces(name='bottom', nb_faces=1)
 bottom_patch[0] = [0, 1]
 
-top_patch = blocks.create_patch_nb_faces(name = 'top', nb_faces = 1)
+top_patch = blocks.create_patch_nb_faces(name='top', nb_faces=1)
 top_patch[0] = [5, 4]
 
-right_patch = blocks.create_patch_nb_faces(name = 'right', nb_faces = 2)
+right_patch = blocks.create_patch_nb_faces(name='right', nb_faces=2)
 right_patch[0] = [1, 3]
 right_patch[1] = [3, 5]
 
-blocks.partition_blocks(nb_partitions = cf.Core.nb_procs(), direction = 0)
+blocks.partition_blocks(nb_partitions=cf.Core.nb_procs(), direction=0)
 
 mesh = domain.create_component('Mesh', 'cf3.mesh.Mesh')
 blocks.create_mesh(mesh.uri())
 
-partitioner = domain.create_component('Partitioner', 'cf3.mesh.actions.PeriodicMeshPartitioner')
+partitioner = domain.create_component(
+    'Partitioner', 'cf3.mesh.actions.PeriodicMeshPartitioner')
 partitioner.mesh = mesh
 
 link_horizontal = partitioner.create_link_periodic_nodes()
@@ -77,7 +80,8 @@ ns_solver.regions = [mesh.topology.interior.uri()]
 
 u_in = [2., 0.]
 
-#initial condition for the velocity. Unset variables (i.e. the pressure) default to zero
+#initial condition for the velocity.
+#Unset variables (i.e. the pressure) default to zero
 solver.InitialConditions.navier_stokes_solution.Velocity = u_in
 
 # Physical constants
@@ -88,26 +92,34 @@ physics.options().set('reference_velocity', u_in[0])
 # Boundary conditions
 bc = ns_solver.BoundaryConditions
 bc.regions = [mesh.topology.uri()]
-bc.add_constant_bc(region_name = 'bottom', variable_name = 'Velocity').value = [0., 0.]
-bc.add_constant_bc(region_name = 'top', variable_name = 'Velocity').value = [0., 0.]
+bc.add_constant_bc(
+    region_name='bottom', variable_name='Velocity').value = [0., 0.]
+bc.add_constant_bc(
+    region_name='top', variable_name='Velocity').value = [0., 0.]
 
 pressure_integral = solver.add_unsteady_solver('cf3.UFEM.SurfaceIntegral')
-pressure_integral.set_field(variable_name = 'Pressure', field_tag = 'navier_stokes_solution')
+pressure_integral.set_field(
+    variable_name='Pressure', field_tag='navier_stokes_solution')
 pressure_integral.regions = [mesh.topology.access_component('bottom').uri()]
-pressure_integral.history = solver.create_component('ForceHistory', 'cf3.solver.History')
+pressure_integral.history = solver.create_component(
+    'ForceHistory', 'cf3.solver.History')
 pressure_integral.history.file = cf.URI('force-implicit.tsv')
 pressure_integral.history.dimension = 2
 
 bulk_velocity = solver.add_unsteady_solver('cf3.UFEM.BulkVelocity')
-bulk_velocity.set_field(variable_name = 'Velocity', field_tag = 'navier_stokes_solution')
+bulk_velocity.set_field(
+    variable_name='Velocity', field_tag='navier_stokes_solution')
 bulk_velocity.regions = [mesh.topology.right.uri()]
-bulk_velocity.history = bulk_velocity.create_component('History', 'cf3.solver.History')
+bulk_velocity.history = bulk_velocity.create_component(
+    'History', 'cf3.solver.History')
 bulk_velocity.history.file = cf.URI('bulk-velocity.tsv')
 bulk_velocity.history.dimension = 1
 
 lss = ns_solver.LSS
-lss.SolutionStrategy.Parameters.LinearSolverTypes.Belos.SolverTypes.BlockGMRES.convergence_tolerance = 1e-5
-lss.SolutionStrategy.Parameters.LinearSolverTypes.Belos.SolverTypes.BlockGMRES.maximum_iterations = 50
+lss.SolutionStrategy.Parameters.LinearSolverTypes.\
+    Belos.SolverTypes.BlockGMRES.convergence_tolerance = 1e-5
+lss.SolutionStrategy.Parameters.LinearSolverTypes.\
+    Belos.SolverTypes.BlockGMRES.maximum_iterations = 50
 
 # Time setup
 time = model.create_time()
@@ -120,24 +132,26 @@ current_end_time = 0.
 iteration = 0
 
 while current_end_time < final_end_time:
-  current_end_time += save_interval
-  time.options().set('end_time', current_end_time)
-  model.simulate()
-  domain.write_mesh(cf.URI('laminar-channel-2d_output-' +str(iteration) + '.pvtu'))
-  iteration += 1
-  if iteration == 1:
-    solver.options().set('disabled_actions', ['InitialConditions'])
+    current_end_time += save_interval
+    time.options().set('end_time', current_end_time)
+    model.simulate()
+    domain.write_mesh(
+        cf.URI('laminar-channel-2d_output-' + str(iteration) + '.pvtu'))
+    iteration += 1
+    if iteration == 1:
+        solver.options().set('disabled_actions', ['InitialConditions'])
 
 # print timings
 model.print_timing_tree()
 
 # centerline velocity
 u_max = 0
-for [u,v,p] in mesh.geometry.navier_stokes_solution:
-  if u > u_max:
-    u_max = u
+for [u, v, p] in mesh.geometry.navier_stokes_solution:
+    if u > u_max:
+        u_max = u
 
 print 'Uc / Ub =', u_max / bulk_velocity.result
 
-if (u_max / bulk_velocity.result) > 1.6 or (u_max / bulk_velocity.result) < 1.4:
-  raise Exception('Laminar profile not reached')
+if ((u_max / bulk_velocity.result) > 1.6
+        or (u_max / bulk_velocity.result) < 1.4):
+    raise Exception('Laminar profile not reached')

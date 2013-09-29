@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 import coolfluid as cf
 
@@ -21,18 +23,20 @@ solver = model.create_solver('cf3.UFEM.Solver')
 # Add the Navier-Stokes solver as an unsteady solver
 ns_solver = solver.add_unsteady_solver('cf3.UFEM.NavierStokes')
 
-ic_visc = solver.InitialConditions.create_initial_condition(builder_name = 'cf3.UFEM.InitialConditionFunction', field_tag = 'navier_stokes_viscosity')
+ic_visc = solver.InitialConditions.create_initial_condition(
+    builder_name='cf3.UFEM.InitialConditionFunction',
+    field_tag='navier_stokes_viscosity')
 ic_visc.variable_name = 'EffectiveViscosity'
 
 # Generate mesh
 blocks = domain.create_component('blocks', 'cf3.mesh.BlockMesh.BlockArrays')
-points = blocks.create_points(dimensions = 2, nb_points = 6)
-points[0]  = [0, 0.]
-points[1]  = [10., 0.]
-points[2]  = [0., 0.5]
-points[3]  = [10., 0.5]
-points[4]  = [0.,1.]
-points[5]  = [10., 1.]
+points = blocks.create_points(dimensions=2, nb_points=6)
+points[0] = [0, 0.]
+points[1] = [10., 0.]
+points[2] = [0., 0.5]
+points[3] = [10., 0.5]
+points[4] = [0., 1.]
+points[5] = [10., 1.]
 
 block_nodes = blocks.create_blocks(2)
 block_nodes[0] = [0, 1, 3, 2]
@@ -46,21 +50,21 @@ gradings = blocks.create_block_gradings()
 gradings[0] = [1., 1., 1., 1.]
 gradings[1] = [1., 1., 1., 1.]
 
-left_patch = blocks.create_patch_nb_faces(name = 'left', nb_faces = 2)
+left_patch = blocks.create_patch_nb_faces(name='left', nb_faces=2)
 left_patch[0] = [2, 0]
 left_patch[1] = [4, 2]
 
-bottom_patch = blocks.create_patch_nb_faces(name = 'bottom', nb_faces = 1)
+bottom_patch = blocks.create_patch_nb_faces(name='bottom', nb_faces=1)
 bottom_patch[0] = [0, 1]
 
-top_patch = blocks.create_patch_nb_faces(name = 'top', nb_faces = 1)
+top_patch = blocks.create_patch_nb_faces(name='top', nb_faces=1)
 top_patch[0] = [5, 4]
 
-right_patch = blocks.create_patch_nb_faces(name = 'right', nb_faces = 2)
+right_patch = blocks.create_patch_nb_faces(name='right', nb_faces=2)
 right_patch[0] = [1, 3]
 right_patch[1] = [3, 5]
 
-blocks.partition_blocks(nb_partitions = cf.Core.nb_procs(), direction = 0)
+blocks.partition_blocks(nb_partitions=cf.Core.nb_procs(), direction=0)
 
 mesh = domain.create_component('Mesh', 'cf3.mesh.Mesh')
 blocks.create_mesh(mesh.uri())
@@ -71,7 +75,8 @@ u_in = [2., 0.]
 
 solver.create_fields()
 
-#initial condition for the velocity. Unset variables (i.e. the pressure) default to zero
+# initial condition for the velocity.
+# Unset variables (i.e. the pressure) default to zero
 solver.InitialConditions.navier_stokes_solution.Velocity = u_in
 ic_visc.value = ['10. + 2*sin(2/pi*x)']
 ic_visc.regions = [mesh.topology.uri()]
@@ -85,15 +90,21 @@ physics.options().set('reference_velocity', u_in[0])
 
 # Boundary conditions
 bc = ns_solver.BoundaryConditions
-bc.add_constant_bc(region_name = 'left', variable_name = 'Velocity').value = u_in
-bc.add_constant_bc(region_name = 'bottom', variable_name = 'Velocity').value = [0., 0.]
-bc.add_constant_bc(region_name = 'top', variable_name = 'Velocity').value = [0., 0.]
-bc.add_constant_bc(region_name = 'right', variable_name = 'Pressure').value = 0.
+bc.add_constant_bc(
+    region_name='left', variable_name='Velocity').value = u_in
+bc.add_constant_bc(
+    region_name='bottom', variable_name='Velocity').value = [0., 0.]
+bc.add_constant_bc(
+    region_name='top', variable_name='Velocity').value = [0., 0.]
+bc.add_constant_bc(
+    region_name='right', variable_name='Pressure').value = 0.
 
 pressure_integral = solver.add_unsteady_solver('cf3.UFEM.SurfaceIntegral')
-pressure_integral.set_field(variable_name = 'Pressure', field_tag = 'navier_stokes_solution')
+pressure_integral.set_field(
+    variable_name='Pressure', field_tag='navier_stokes_solution')
 pressure_integral.regions = [mesh.topology.access_component('bottom').uri()]
-pressure_integral.history = solver.create_component('ForceHistory', 'cf3.solver.History')
+pressure_integral.history = solver.create_component(
+    'ForceHistory', 'cf3.solver.History')
 pressure_integral.history.file = cf.URI('force-implicit.tsv')
 pressure_integral.history.dimension = 2
 
@@ -115,15 +126,17 @@ writer.enable_overlap = True
 writer.mesh = mesh
 
 while current_end_time < final_end_time:
-  current_end_time += save_interval
-  time.options().set('end_time', current_end_time)
-  model.simulate()
-  writer.file = cf.URI('laminar-channel-2d_output-' +str(iteration) + '.msh')
-  writer.execute()
-  domain.write_mesh(cf.URI('laminar-channel-2d_output-' +str(iteration) + '.pvtu'))
-  iteration += 1
-  if iteration == 1:
-    solver.options().set('disabled_actions', ['InitialConditions'])
+    current_end_time += save_interval
+    time.options().set('end_time', current_end_time)
+    model.simulate()
+    writer.file = cf.URI(
+        'laminar-channel-2d_output-' + str(iteration) + '.msh')
+    writer.execute()
+    domain.write_mesh(
+        cf.URI('laminar-channel-2d_output-' + str(iteration) + '.pvtu'))
+    iteration += 1
+    if iteration == 1:
+        solver.options().set('disabled_actions', ['InitialConditions'])
 
 # print timings
 model.print_timing_tree()

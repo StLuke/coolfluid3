@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 import coolfluid as cf
 
@@ -20,7 +22,8 @@ solver = model.create_solver('cf3.UFEM.Solver')
 hc = solver.add_direct_solver('cf3.UFEM.HeatConductionSteady')
 
 # Generate a channel mesh
-generator = domain.create_component('generator', 'cf3.mesh.BlockMesh.ChannelGenerator')
+generator = domain.create_component(
+    'generator', 'cf3.mesh.BlockMesh.ChannelGenerator')
 generator.options().set('mesh', cf.URI('//HotModel/Domain/mesh'))
 generator.options().set('x_segments', 64)
 generator.options().set('cell_overlap', 1)
@@ -30,8 +33,8 @@ hc.options().set('regions', [domain.access_component('mesh/topology').uri()])
 
 # Boundary conditions
 bc = hc.get_child('BoundaryConditions')
-bc.add_constant_bc(region_name = 'left', variable_name = 'Temperature')
-bc.add_constant_bc(region_name = 'right', variable_name = 'Temperature')
+bc.add_constant_bc(region_name='left', variable_name='Temperature')
+bc.add_constant_bc(region_name='right', variable_name='Temperature')
 bc.get_child('BCleftTemperature').options().set('value', 10)
 bc.get_child('BCrightTemperature').options().set('value', 35)
 
