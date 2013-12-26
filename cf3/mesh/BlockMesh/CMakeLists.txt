@@ -5,6 +5,8 @@ list( APPEND coolfluid_mesh_blockmesh_files
   ChannelGenerator.cpp
   LibBlockMesh.cpp
   LibBlockMesh.hpp
+  NurbsEvaluation.cpp
+  NurbsEvaluation.hpp
 )
 
 coolfluid3_add_library( TARGET  coolfluid_mesh_blockmesh
