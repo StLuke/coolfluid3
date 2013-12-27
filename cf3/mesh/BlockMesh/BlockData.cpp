@@ -25,6 +25,9 @@
 #include "common/PE/Comm.hpp"
 
 #include "mesh/BlockMesh/BlockData.hpp"
+#include "mesh/BlockMesh/NurbsEvaluation.hpp"
+
+#include <fstream>
 
 #include "mesh/Cells.hpp"
 #include "mesh/Elements.hpp"
@@ -145,13 +148,15 @@ struct BlockArrays::Implementation
   Handle< common::Table<Uint> > blocks;
   Handle< common::Table<Uint> > block_subdivisions;
   Handle< common::Table<Real> > block_gradings;
-
   Handle< common::Group > patches;
 
   Handle<Mesh> block_mesh;
+  Handle<NurbsEvaluation> nurbs;
   Handle<Connectivity> default_shell_connectivity;
   Handle<CFaceConnectivity> face_connectivity;
 
+  std::vector<Real> nurbs_param;
+  bool nurbs_enabled;
   /// Encapsulate a single block, providing all data needed to produce the mesh connectivity
   struct Block
   {
@@ -616,6 +621,25 @@ struct BlockArrays::Implementation
         mesh_coords[node_idx][XX] = coords[XX];
         mesh_coords[node_idx][YY] = coords[YY];
       }
+    }
+  }
+
+  void fill_block_nurbs_coordinates(Table<Real>& mesh_coords) {
+    int i=0;
+    for (float u=0; u <= nurbs->Knots[0][nurbs->Knots[0].size()-1]; u+=nurbs_param[0] ) {
+      for(float v=0; v <= ((nurbs->Points[0].size() == 1)?0:(nurbs->Knots[1][nurbs->Knots[1].size()-1])); v+=nurbs_param[1]) {
+        for (float w=0; w <= ((nurbs->Points.size() == 1)?0:(nurbs->Knots[2][nurbs->Knots[2].size()-1])); w+=nurbs_param[2]) {
+          Real Out[3]={0,0,0};
+          std::vector <Real> param;
+          param.push_back(u);
+          param.push_back(v);
+          param.push_back(w);
+          nurbs->GetOutpoint(param, Out);
+      
+          mesh_coords[i][XX] = Out[0];
+          mesh_coords[i++][YY] = Out[1];
+        }
+      }   
     }
   }
 
@@ -1203,8 +1227,10 @@ BlockArrays::BlockArrays(const std::string& name) :
   Component(name),
   m_implementation(new Implementation())
 {
+	
+  m_implementation->nurbs = create_component<NurbsEvaluation>("NurbsIntepolationComponent");
+  m_implementation->nurbs_enabled = false;
   m_implementation->patches = create_static_component<Group>("Patches");
-
   regist_signal( "create_points" )
     .connect( boost::bind( &BlockArrays::signal_create_points, this, _1 ) )
     .description("Create an array holding the points")
@@ -1255,6 +1281,18 @@ BlockArrays::BlockArrays(const std::string& name) :
     .description("Extrude a 2D mesh in a number of spanwise (Z-direction) blocks. The number of spanwise blocks is determined by the size of the passed arguments")
     .pretty_name("Extrude Blocks")
     .signature( boost::bind(&BlockArrays::signature_extrude_blocks, this, _1) );
+
+  regist_signal( "index_points2D" )
+    .connect( boost::bind( &BlockArrays::signal_index_points2D, this, _1 ) )
+    .description("Set indexes for the 2D points in nurbs matrix")
+    .pretty_name("Index 2D points")
+    .signature( boost::bind(&BlockArrays::signature_index_points2D, this, _1) );
+
+  regist_signal( "index_points3D" )
+    .connect( boost::bind( &BlockArrays::signal_index_points3D, this, _1 ) )
+    .description("Set indexes for the 3D points in nurbs matrix")
+    .pretty_name("Index 3D points")
+    .signature( boost::bind(&BlockArrays::signature_index_points3D, this, _1) );
 
   regist_signal( "create_mesh" )
     .connect( boost::bind( &BlockArrays::signal_create_mesh, this, _1 ) )
@@ -1609,10 +1647,13 @@ void BlockArrays::create_mesh(Mesh& mesh)
 {
   // Check user-supplied data
   m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");
-  m_implementation->check_handle(m_implementation->blocks, "create_blocks", "Blocks definition");
-  m_implementation->check_handle(m_implementation->block_subdivisions, "create_block_subdivisions", "Block subdivisions");
-  m_implementation->check_handle(m_implementation->block_gradings, "create_block_gradings", "Block gradings");
-
+  if (!m_implementation->nurbs_enabled) {
+    m_implementation->check_handle(m_implementation->blocks, "create_blocks", "Blocks definition");
+    m_implementation->check_handle(m_implementation->block_subdivisions, "create_block_subdivisions", "Block subdivisions");
+    m_implementation->check_handle(m_implementation->block_gradings, "create_block_gradings", "Block gradings");
+ } else if (!m_implementation->nurbs->validate())
+		throw SetupError(FromHere(), "Nurbs definition incorrect");	
+		
   const Table<Real>& points = *m_implementation->points;
   const Table<Uint>& blocks = *m_implementation->blocks;
   const Table<Uint>& block_subdivisions =  *m_implementation->block_subdivisions;
@@ -1677,18 +1718,27 @@ void BlockArrays::create_mesh(Mesh& mesh)
   const Uint nb_nodes_local = nodes_end - nodes_begin;
 
   // Initialize coordinates
-  mesh.initialize_nodes(nb_nodes_local + m_implementation->ghost_counter, dimensions);
-  Field& coordinates = mesh.geometry_fields().coordinates();
 
   // Fill the coordinate array
-  for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
-  {
-    if(dimensions == 3)
-      m_implementation->fill_block_coordinates_3d<Hexa3D>(coordinates, block_idx);
-    if(dimensions == 2)
-      m_implementation->fill_block_coordinates_2d<Quad2D>(coordinates, block_idx);
+  if (m_implementation->nurbs_enabled) {
+    Uint points_count = m_implementation->nurbs->Knots[0][m_implementation->nurbs->Knots[0].size()-1] / m_implementation->nurbs_param[0] +
+           m_implementation->nurbs->Knots[1][m_implementation->nurbs->Knots[1].size()-1] / m_implementation->nurbs_param[1] +
+           m_implementation->nurbs->Knots[2][m_implementation->nurbs->Knots[2].size()-1] / m_implementation->nurbs_param[2];
+    mesh.initialize_nodes(points_count, dimensions);
+    Field& coordinates = mesh.geometry_fields().coordinates();
+      
+    m_implementation->fill_block_nurbs_coordinates(coordinates);
+  } else {
+    for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
+    {
+      mesh.initialize_nodes(nb_nodes_local + m_implementation->ghost_counter, dimensions);
+      Field& coordinates = mesh.geometry_fields().coordinates();
+      if(dimensions == 3)
+        m_implementation->fill_block_coordinates_3d<Hexa3D>(coordinates, block_idx);
+      if(dimensions == 2)
+        m_implementation->fill_block_coordinates_2d<Quad2D>(coordinates, block_idx);
+    }
   }
-
   // Add surface patches
   for(Implementation::PatchMapT::const_iterator it = m_implementation->patch_map.begin(); it != m_implementation->patch_map.end(); ++it)
   {
@@ -1785,6 +1835,35 @@ void BlockArrays::create_mesh(Mesh& mesh)
     mesh.block_mesh_changed(false);
   }
   mesh.raise_mesh_loaded();
+}
+
+void BlockArrays::index_points3D(const int index, const int weight, const int x, const int y, const int z)
+{
+	const Table<Real>& points = *m_implementation->points;
+	m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");	
+	if (index < 0 || index >= m_implementation-> points)
+	m_implementation->nurbs->AddPoint(points[index], weight, z, y, x);
+}
+
+void BlockArrays::index_points2D(const int index, const int weight, const int x, const int y)
+{
+	const Table<Real>& points = *m_implementation->points;
+	m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");	
+	if (index < 0 || index >= m_implementation-> points)
+		throw SetupError(FromHere(), "Arguments passed to index_points is out of range of points");	
+	m_implementation->nurbs->AddPoint(points[index], weight, 0, y, x);
+}
+
+void BlockArrays::add_knot_vector(const std::vector<Real>& knot) {
+	m_implementation->nurbs->AddKnots(knot);
+}
+
+void BlockArrays::init_nurbs(Real u, Real v, Real w) {
+  m_implementation->nurbs_enabled = true;
+  m_implementation->nurbs_param.push_back(u);
+  m_implementation->nurbs_param.push_back(v);
+  m_implementation->nurbs_param.push_back(w);
+  m_implementation->nurbs->InitNurbs();
 }
 
 void BlockArrays::signature_partition_blocks(SignalArgs& args)
@@ -1899,6 +1978,85 @@ void BlockArrays::signal_extrude_blocks(SignalArgs& args)
                  options["gradings"].value< std::vector<Real> >());
 }
 
+void BlockArrays::signature_index_points2D(SignalArgs& args)
+{
+  SignalOptions options(args);
+  options.add("index", 0)
+    .pretty_name("Index")
+    .description("Index of point in points array to be added to matrix and its weight");
+
+  options.add("weight", 1)
+    .pretty_name("Weight")
+    .description("Rational weight of the point");
+
+  options.add("x", 0)
+    .pretty_name("X")
+    .description("First direction in the matrix");
+    
+  options.add("y", 0)
+    .pretty_name("Y")
+    .description("Second direction in the matrix");
+}
+
+void BlockArrays::signal_index_points2D(SignalArgs& args)
+{
+  SignalOptions options(args);
+  index_points2D(options["index"].value< const int >(),
+                 options["weight"].value< const int >(),
+                 options["x"].value< const int >(),
+                 options["y"].value< const int >());
+}
+
+void BlockArrays::signature_index_points3D(SignalArgs& args)
+{
+  SignalOptions options(args);
+  options.add("index", 0)
+    .pretty_name("Index")
+    .description("Index of point in points array to be added to matrix and its weight");
+
+  options.add("weight", 1)
+    .pretty_name("Weight")
+    .description("Rational weight of the point");
+
+  options.add("x", 0)
+    .pretty_name("X")
+    .description("First direction in the matrix");
+    
+  options.add("y", 0)
+    .pretty_name("Y")
+    .description("Second direction in the matrix");
+    
+  options.add("z", 0)
+    .pretty_name("Z")
+    .description("Second direction in the matrix");
+}
+
+void BlockArrays::signal_index_points3D(SignalArgs& args)
+{
+  SignalOptions options(args);
+  index_points3D(options["index"].value< const int >(),
+                 options["weight"].value< const int >(),
+                 options["x"].value< const int >(),
+                 options["y"].value< const int >(),
+                 options["z"].value< const int >());
+}
+
+void BlockArrays::signature_add_knot_vector(SignalArgs& args)
+{
+  SignalOptions options(args);
+  
+  options.add("knot", std::vector<Real>())
+    .pretty_name("Knot vector")
+    .description("Add knot vector for nurbs volume");
+
+}
+
+void BlockArrays::signal_add_knot_vector(SignalArgs& args)
+{
+  SignalOptions options(args);
+  add_knot_vector(options["knot"].value< std::vector<Real> >());
+}
+
 void BlockArrays::signature_create_mesh(SignalArgs& args)
 {
   SignalOptions options(args);
@@ -1906,6 +2064,31 @@ void BlockArrays::signature_create_mesh(SignalArgs& args)
     .supported_protocol(cf3::common::URI::Scheme::CPATH)
     .pretty_name("Output Mesh")
     .description("URI to a mesh in which to create the output");
+}
+
+
+void BlockArrays::signature_init_nurbs(SignalArgs& args)
+{
+  SignalOptions options(args);
+  options.add("u", 0)
+    .pretty_name("u")
+    .description("Distance between points in 1st direction");
+    
+  options.add("v", 0)
+    .pretty_name("V")
+    .description("Distance between points in 2nd direction");
+    
+  options.add("v", 0)
+    .pretty_name("W")
+    .description("Distance between points in 3rd direction");
+}
+
+void BlockArrays::signal_init_nurbs(SignalArgs& args)
+{
+  SignalOptions options(args);
+  init_nurbs(options["x"].value< Real >(),
+             options["y"].value< Real >(),
+             options["z"].value< Real >());
 }
 
 void BlockArrays::signal_create_mesh(SignalArgs& args)

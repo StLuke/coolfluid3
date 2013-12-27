@@ -65,6 +65,19 @@ public:
   /// Create the volume block mesh
   Handle<Mesh> create_block_mesh();
 
+  /// Index 3D points into nurbs volume
+  /// @param nb_partitions Number of partitions to create
+  /// @param X X direction in NURBS volume
+  /// @param Y Y direction in NURBS volume
+  /// @param Z Z direction in NURBS volume
+  void index_points3D(const int index, const int weight, const int x, const int y, const int z);
+
+  /// Index 2Dpoints into nurbs volume
+  /// @param nb_partitions Number of partitions to create
+  /// @param X X direction in NURBS volume
+  /// @param Y Y direction in NURBS volume
+  void index_points2D(const int index, const int weight, const int x, const int y);
+  
   /// Partition the blocks along one direction. If a previous partitioning exists, each partition is repartitioned into
   /// nb_partitions blocks
   /// @param nb_partitions Number of partitions to create
@@ -77,11 +90,20 @@ public:
   /// @param nb_segments Number of spanwise segments for each block
   /// @param gradings Uniform grading definition in the spanwise direction for each block
   void extrude_blocks(const std::vector<Real>& positions, const std::vector<Uint>& nb_segments, const std::vector<Real>& gradings);
-
+  
+  ///Add Knot vetor for nurbs interpolation
+  /// @param knot knot vector
+  void add_knot_vector(const std::vector<Real>& knot);
+  
   /// Create the refined mesh
   /// @param mesh The mesh in which the output will be stored
   void create_mesh(Mesh& mesh);
 
+  /// Initialize Nurbs
+  /// @param u distance between points in 1st direction
+  /// @param v distance between points in 2nd direction
+  /// @param w distance between points in 3rd direction
+  void init_nurbs(Real u, Real v, Real w);
   /// @name SIGNALS
   //@{
 
@@ -99,9 +121,17 @@ public:
   void signature_partition_blocks(common::SignalArgs& args);
   void signal_partition_blocks(common::SignalArgs& args);
   void signature_create_mesh(common::SignalArgs& args);
+  void signal_create_mesh(common::SignalArgs& args);
   void signature_extrude_blocks(common::SignalArgs& args);
   void signal_extrude_blocks(common::SignalArgs& args);
-  void signal_create_mesh(common::SignalArgs& args);
+  void signature_index_points2D(common::SignalArgs& args);
+  void signal_index_points2D(common::SignalArgs& args);
+  void signature_index_points3D(common::SignalArgs& args);
+  void signal_index_points3D(common::SignalArgs& args);
+  void signature_add_knot_vector(common::SignalArgs& args);
+  void signal_add_knot_vector(common::SignalArgs& args);
+  void signature_init_nurbs(common::SignalArgs& args);
+  void signal_init_nurbs(common::SignalArgs& args);
 
   //@} END SIGNALS
 

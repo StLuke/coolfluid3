@@ -25,8 +25,10 @@ namespace cf3 {
 namespace mesh {
 namespace BlockMesh {
 
+using namespace cf3::common;
+using namespace cf3::mesh;
 
-//ComponentBuilder < NurbsEvaluation, Component, LibBlockMesh > NurbsEvaluation_Builder;
+common::ComponentBuilder < NurbsEvaluation, Component, LibBlockMesh > NurbsEvaluation_Builder;
 
 NurbsEvaluation::NurbsEvaluation(const std::string& name) : Component(name)
 {
@@ -128,8 +130,7 @@ void NurbsEvaluation::AddPoint(cf3::common::Table<Real>::ConstRow  point, const 
 void NurbsEvaluation::AddKnots(std::vector<Real> k) {
     Knots.push_back(k);
 }
-void NurbsEvaluation::InitNutbs(){
-    
+void NurbsEvaluation::InitNurbs(){
 	num_points.push_back(Points[0][0].size());
     num_points.push_back(Points[0].size());
     num_points.push_back(Points.size());
@@ -148,6 +149,38 @@ void NurbsEvaluation::SetDimension(int dimension) {
         dim =3;
 }
 
+bool NurbsEvaluation::validate() {
+	Knots.resize(3);
+	//check that each row and column has same amount of points
+	for (int i=0; i < Points.size(); i++) {
+		if (Points[i].size() != Points[0].size())
+			return false;
+		for (int j=0; j < Points[i].size(); j++)
+			if (Points[i][j].size() != Points[i][0].size())
+				return false;
+	}
+	//
+	
+	//make knots vectors for constan parameters
+	std::vector<Real> normalized_knot_vector;
+	normalized_knot_vector.push_back(0);
+	normalized_knot_vector.push_back(0);
+	normalized_knot_vector.push_back(1);
+	
+	
+	if (Points.size() == 1)
+		Knots[2] = normalized_knot_vector;
+	if (Points[0].size() == 1)
+		Knots[1] = normalized_knot_vector;
+	//check knot vectors
+	for (int i=0;  Knots.size(); i++) {
+		if (Knots[i].size() < 3)
+			return false;
+		for (int j=1; j < Knots[i].size(); j++)
+			if (Knots[i][j] > Knots[i][j-1])
+				return false;
+	} 
+}
 
 } // BlockMesh
 } // mesh

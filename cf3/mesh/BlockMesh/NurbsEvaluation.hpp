@@ -11,6 +11,7 @@
 #include "common/Component.hpp"
 #include <vector>
 
+#include "mesh/BlockMesh/LibBlockMesh.hpp"
 namespace cf3 {
 namespace mesh {
 namespace BlockMesh {
@@ -40,16 +41,20 @@ public:
   /// Add knot vectors for each direction
   /// @param Knots - vector of Kont vectors
   void AddKnots(std::vector<Real>Knots);
-  /// Initialise the order vector and num_points vector for ocmputation
-  void InitNutbs();
+  /// Initialise the order vector and num_points vector for computation
+  void InitNurbs();
   /// Set weather to work in 2D/3D space
   /// @param dimension 2 or 3 (depends on dimension of computation)
   void SetDimension(int dimension);
+  /// validate all values of nurbs definition
+  
+  bool validate();
+  
+  std::vector<std::vector<Real> >Knots;
+  std::vector<std::vector<std::vector<std::vector<Real> > > >Points;
   
 private:
   std::vector<unsigned int>order;
-  std::vector<std::vector<Real> >Knots;
-  std::vector<std::vector<std::vector<std::vector<Real> > > >Points;
   std::vector<std::vector<std::vector<Real> > >Weights;
   std::vector<unsigned int> num_points;
   int dim;
