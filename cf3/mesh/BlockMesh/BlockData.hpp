@@ -70,13 +70,13 @@ public:
   /// @param X X direction in NURBS volume
   /// @param Y Y direction in NURBS volume
   /// @param Z Z direction in NURBS volume
-  void index_points3D(const int index, const int weight, const int x, const int y, const int z);
+  void index_points3D(const int index, const Real weight, const int x, const int y, const int z);
 
   /// Index 2Dpoints into nurbs volume
   /// @param nb_partitions Number of partitions to create
   /// @param X X direction in NURBS volume
   /// @param Y Y direction in NURBS volume
-  void index_points2D(const int index, const int weight, const int x, const int y);
+  void index_points2D(const int index, const Real weight, const int x, const int y);
   
   /// Partition the blocks along one direction. If a previous partitioning exists, each partition is repartitioned into
   /// nb_partitions blocks
@@ -104,6 +104,7 @@ public:
   /// @param v distance between points in 2nd direction
   /// @param w distance between points in 3rd direction
   void init_nurbs(Real u, Real v, Real w);
+  
   /// @name SIGNALS
   //@{
 

@@ -115,9 +115,9 @@ void NurbsEvaluation::AddPoint(cf3::common::Table<Real>::ConstRow  point, const 
 		Points[x].resize(y+1);
 		Weights[x].resize(y+1);
 	}
-    if (Points[y].size() <= z) {
-		Points[y].resize(z+1);
-		Weights[y].resize(z+1);
+    if (Points[x][y].size() <= z) {
+		Points[x][y].resize(z+1);
+		Weights[x][y].resize(z+1);
 	}
 	std::vector<Real> p;
 	p.push_back(point[0]);
@@ -149,37 +149,33 @@ void NurbsEvaluation::SetDimension(int dimension) {
         dim =3;
 }
 
-bool NurbsEvaluation::validate() {
-	Knots.resize(3);
+int NurbsEvaluation::validate() {
 	//check that each row and column has same amount of points
 	for (int i=0; i < Points.size(); i++) {
 		if (Points[i].size() != Points[0].size())
-			return false;
+			return -1;
 		for (int j=0; j < Points[i].size(); j++)
 			if (Points[i][j].size() != Points[i][0].size())
-				return false;
+				return -1;
 	}
-	//
 	
+	Knots.resize(3);
 	//make knots vectors for constan parameters
 	std::vector<Real> normalized_knot_vector;
 	normalized_knot_vector.push_back(0);
 	normalized_knot_vector.push_back(0);
 	normalized_knot_vector.push_back(1);
-	
-	
 	if (Points.size() == 1)
 		Knots[2] = normalized_knot_vector;
 	if (Points[0].size() == 1)
 		Knots[1] = normalized_knot_vector;
 	//check knot vectors
-	for (int i=0;  Knots.size(); i++) {
-		if (Knots[i].size() < 3)
-			return false;
-		for (int j=1; j < Knots[i].size(); j++)
-			if (Knots[i][j] > Knots[i][j-1])
-				return false;
-	} 
+	for (int i=0; i < Knots.size(); i++) {
+		for (int j=1; j < Knots[i].size(); j++) 
+			if (Knots[i][j-1] > Knots[i][j])
+				return 2;
+	}
+	return 0; 
 }
 
 } // BlockMesh

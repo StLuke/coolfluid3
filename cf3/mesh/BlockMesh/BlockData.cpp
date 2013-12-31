@@ -1294,6 +1294,18 @@ BlockArrays::BlockArrays(const std::string& name) :
     .pretty_name("Index 3D points")
     .signature( boost::bind(&BlockArrays::signature_index_points3D, this, _1) );
 
+  regist_signal( "add_knot_vector" )
+    .connect( boost::bind( &BlockArrays::signal_add_knot_vector, this, _1 ) )
+    .description("Add Knot vetor for nurbs interpolation")
+    .pretty_name("Add knot vector")
+    .signature( boost::bind(&BlockArrays::signature_add_knot_vector, this, _1) );
+
+  regist_signal( "init_nurbs")
+    .connect( boost::bind( &BlockArrays::signal_init_nurbs, this, _1 ) )
+    .description("Initialize Nurbs interpolation and set distance between points in each direction")
+    .pretty_name("Initialize Nurbs")
+    .signature( boost::bind(&BlockArrays::signature_init_nurbs, this, _1) );
+
   regist_signal( "create_mesh" )
     .connect( boost::bind( &BlockArrays::signal_create_mesh, this, _1 ) )
     .description("Create the final mesh.")
@@ -1505,7 +1517,7 @@ Handle< Mesh > BlockArrays::create_block_mesh()
       block_ranks[field_idx][0] = part;
     }
   }
-
+  exit(0);
   return m_implementation->block_mesh;
 }
 
@@ -1646,13 +1658,16 @@ void BlockArrays::extrude_blocks(const std::vector<Real>& positions, const std::
 void BlockArrays::create_mesh(Mesh& mesh)
 {
   // Check user-supplied data
+  
   m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");
   if (!m_implementation->nurbs_enabled) {
     m_implementation->check_handle(m_implementation->blocks, "create_blocks", "Blocks definition");
     m_implementation->check_handle(m_implementation->block_subdivisions, "create_block_subdivisions", "Block subdivisions");
     m_implementation->check_handle(m_implementation->block_gradings, "create_block_gradings", "Block gradings");
- } else if (!m_implementation->nurbs->validate())
-		throw SetupError(FromHere(), "Nurbs definition incorrect");	
+ } else if (m_implementation->nurbs->validate() == -1)
+		throw SetupError(FromHere(), "Nurbs definition incorrect: Not cubic matrix definition of points");
+  else if (m_implementation->nurbs->validate() > 0)
+		throw SetupError(FromHere(), "Nurbs definition incorrect: Incorrect knot vetors");
 		
   const Table<Real>& points = *m_implementation->points;
   const Table<Uint>& blocks = *m_implementation->blocks;
@@ -1662,7 +1677,7 @@ void BlockArrays::create_mesh(Mesh& mesh)
 
   // Make sure the block connectivity mesh is up-to-date
   create_block_mesh();
-
+	exit(0);
   const Uint nb_procs = PE::Comm::instance().size();
   const Uint rank = PE::Comm::instance().rank();
   const Uint dimensions = points.row_size();
@@ -1726,7 +1741,7 @@ void BlockArrays::create_mesh(Mesh& mesh)
            m_implementation->nurbs->Knots[2][m_implementation->nurbs->Knots[2].size()-1] / m_implementation->nurbs_param[2];
     mesh.initialize_nodes(points_count, dimensions);
     Field& coordinates = mesh.geometry_fields().coordinates();
-      
+    m_implementation->nurbs->InitNurbs();  
     m_implementation->fill_block_nurbs_coordinates(coordinates);
   } else {
     for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
@@ -1837,7 +1852,7 @@ void BlockArrays::create_mesh(Mesh& mesh)
   mesh.raise_mesh_loaded();
 }
 
-void BlockArrays::index_points3D(const int index, const int weight, const int x, const int y, const int z)
+void BlockArrays::index_points3D(const int index, const Real weight, const int x, const int y, const int z)
 {
 	const Table<Real>& points = *m_implementation->points;
 	m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");	
@@ -1845,7 +1860,7 @@ void BlockArrays::index_points3D(const int index, const int weight, const int x,
 	m_implementation->nurbs->AddPoint(points[index], weight, z, y, x);
 }
 
-void BlockArrays::index_points2D(const int index, const int weight, const int x, const int y)
+void BlockArrays::index_points2D(const int index, const Real weight, const int x, const int y)
 {
 	const Table<Real>& points = *m_implementation->points;
 	m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");	
@@ -1863,7 +1878,6 @@ void BlockArrays::init_nurbs(Real u, Real v, Real w) {
   m_implementation->nurbs_param.push_back(u);
   m_implementation->nurbs_param.push_back(v);
   m_implementation->nurbs_param.push_back(w);
-  m_implementation->nurbs->InitNurbs();
 }
 
 void BlockArrays::signature_partition_blocks(SignalArgs& args)
@@ -1985,7 +1999,7 @@ void BlockArrays::signature_index_points2D(SignalArgs& args)
     .pretty_name("Index")
     .description("Index of point in points array to be added to matrix and its weight");
 
-  options.add("weight", 1)
+  options.add("weight", Real(1))
     .pretty_name("Weight")
     .description("Rational weight of the point");
 
@@ -2002,7 +2016,7 @@ void BlockArrays::signal_index_points2D(SignalArgs& args)
 {
   SignalOptions options(args);
   index_points2D(options["index"].value< const int >(),
-                 options["weight"].value< const int >(),
+                 options["weight"].value< const Real >(),
                  options["x"].value< const int >(),
                  options["y"].value< const int >());
 }
@@ -2014,7 +2028,7 @@ void BlockArrays::signature_index_points3D(SignalArgs& args)
     .pretty_name("Index")
     .description("Index of point in points array to be added to matrix and its weight");
 
-  options.add("weight", 1)
+  options.add("weight", Real(1))
     .pretty_name("Weight")
     .description("Rational weight of the point");
 
@@ -2035,7 +2049,7 @@ void BlockArrays::signal_index_points3D(SignalArgs& args)
 {
   SignalOptions options(args);
   index_points3D(options["index"].value< const int >(),
-                 options["weight"].value< const int >(),
+                 options["weight"].value< const Real >(),
                  options["x"].value< const int >(),
                  options["y"].value< const int >(),
                  options["z"].value< const int >());
@@ -2070,15 +2084,15 @@ void BlockArrays::signature_create_mesh(SignalArgs& args)
 void BlockArrays::signature_init_nurbs(SignalArgs& args)
 {
   SignalOptions options(args);
-  options.add("u", 0)
-    .pretty_name("u")
+  options.add("u", Real(0))
+    .pretty_name("U")
     .description("Distance between points in 1st direction");
     
-  options.add("v", 0)
+  options.add("v", Real(0))
     .pretty_name("V")
     .description("Distance between points in 2nd direction");
     
-  options.add("v", 0)
+  options.add("w", Real(0))
     .pretty_name("W")
     .description("Distance between points in 3rd direction");
 }
@@ -2086,9 +2100,9 @@ void BlockArrays::signature_init_nurbs(SignalArgs& args)
 void BlockArrays::signal_init_nurbs(SignalArgs& args)
 {
   SignalOptions options(args);
-  init_nurbs(options["x"].value< Real >(),
-             options["y"].value< Real >(),
-             options["z"].value< Real >());
+  init_nurbs(options["u"].value< Real >(),
+             options["v"].value< Real >(),
+             options["w"].value< Real >());
 }
 
 void BlockArrays::signal_create_mesh(SignalArgs& args)

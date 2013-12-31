@@ -47,8 +47,7 @@ public:
   /// @param dimension 2 or 3 (depends on dimension of computation)
   void SetDimension(int dimension);
   /// validate all values of nurbs definition
-  
-  bool validate();
+  int validate();
   
   std::vector<std::vector<Real> >Knots;
   std::vector<std::vector<std::vector<std::vector<Real> > > >Points;

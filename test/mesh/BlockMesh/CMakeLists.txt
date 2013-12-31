@@ -41,3 +41,13 @@ coolfluid_add_test(ATEST atest-blockmesh-multiregion
 coolfluid_add_test(ATEST atest-blockmesh-backstep2d-zoltan
                    PYTHON atest-blockmesh-backstep2d-zoltan.py
                    MPI 8)
+
+################################################################################
+
+coolfluid_add_test(ATEST atest-blockmesh-nurbs-parabolic-surface
+                   PYTHON atest-blockmesh-nurbs-parabolic-surface.py)
+
+################################################################################
+
+coolfluid_add_test(ATEST atest-blockmesh-nurbs-circle
+                   PYTHON atest-blockmesh-nurbs-circle.py)
