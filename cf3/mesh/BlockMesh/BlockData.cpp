@@ -1517,7 +1517,6 @@ Handle< Mesh > BlockArrays::create_block_mesh()
       block_ranks[field_idx][0] = part;
     }
   }
-  exit(0);
   return m_implementation->block_mesh;
 }
 
@@ -1677,7 +1676,7 @@ void BlockArrays::create_mesh(Mesh& mesh)
 
   // Make sure the block connectivity mesh is up-to-date
   create_block_mesh();
-	exit(0);
+  
   const Uint nb_procs = PE::Comm::instance().size();
   const Uint rank = PE::Comm::instance().rank();
   const Uint dimensions = points.row_size();
