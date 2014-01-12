@@ -625,22 +625,34 @@ struct BlockArrays::Implementation
   }
 
   void fill_block_nurbs_coordinates(Table<Real>& mesh_coords) {
-    int i=0;
-    for (float u=0; u <= nurbs->Knots[0][nurbs->Knots[0].size()-1]; u+=nurbs_param[0] ) {
-      for(float v=0; v <= ((nurbs->Points[0].size() == 1)?0:(nurbs->Knots[1][nurbs->Knots[1].size()-1])); v+=nurbs_param[1]) {
-        for (float w=0; w <= ((nurbs->Points.size() == 1)?0:(nurbs->Knots[2][nurbs->Knots[2].size()-1])); w+=nurbs_param[2]) {
+		
+    int i=0;																		//counter of points
+    Real u_step = nurbs_param[0];
+    Real v_step = nurbs_param[1];
+    Real w_step = nurbs_param[2];
+   
+    if (v_step == 0)
+			v_step = nurbs->Knots[1][nurbs->Knots[1].size()-1];
+    if (w_step == 0)
+			w_step = nurbs->Knots[2][nurbs->Knots[2].size()-1];
+		
+	
+    for (float u=0; u <= nurbs->Knots[0][nurbs->Knots[0].size()-1]; u+=u_step ) {
+      for(float v=0; v <= ((nurbs->Points[0].size() == 1)?0:(nurbs->Knots[1][nurbs->Knots[1].size()-1])); v+=v_step) {
+        for (float w=0; w <= ((nurbs->Points.size() == 1)?0:(nurbs->Knots[2][nurbs->Knots[2].size()-1])); w+=w_step) {
           Real Out[3]={0,0,0};
           std::vector <Real> param;
           param.push_back(u);
           param.push_back(v);
           param.push_back(w);
           nurbs->GetOutpoint(param, Out);
-      
+          
           mesh_coords[i][XX] = Out[0];
           mesh_coords[i++][YY] = Out[1];
         }
       }   
     }
+    
   }
 
   void add_patch(const std::string& name, Elements& patch_elems)
@@ -1658,205 +1670,210 @@ void BlockArrays::extrude_blocks(const std::vector<Real>& positions, const std::
 void BlockArrays::create_mesh(Mesh& mesh)
 {
   // Check user-supplied data
-  
-  m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");
   if (!m_implementation->nurbs_enabled) {
-    m_implementation->check_handle(m_implementation->blocks, "create_blocks", "Blocks definition");
-    m_implementation->check_handle(m_implementation->block_subdivisions, "create_block_subdivisions", "Block subdivisions");
-    m_implementation->check_handle(m_implementation->block_gradings, "create_block_gradings", "Block gradings");
- } else if (m_implementation->nurbs->validate() == -1)
-		throw SetupError(FromHere(), "Nurbs definition incorrect: Not cubic matrix definition of points");
-  else if (m_implementation->nurbs->validate() > 0)
-		throw SetupError(FromHere(), "Nurbs definition incorrect: Incorrect knot vetors");
+	  m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");
+	  m_implementation->check_handle(m_implementation->blocks, "create_blocks", "Blocks definition");
+	  m_implementation->check_handle(m_implementation->block_subdivisions, "create_block_subdivisions", "Block subdivisions");
+	  m_implementation->check_handle(m_implementation->block_gradings, "create_block_gradings", "Block gradings");
+			
+	  const Table<Real>& points = *m_implementation->points;
+	  const Table<Uint>& blocks = *m_implementation->blocks;
+	  const Table<Uint>& block_subdivisions =  *m_implementation->block_subdivisions;
+
+	  common::Timer timer;
+
+	  // Make sure the block connectivity mesh is up-to-date
+	  create_block_mesh();
+	  
+	  const Uint nb_procs = PE::Comm::instance().size();
+	  const Uint rank = PE::Comm::instance().rank();
+	  const Uint dimensions = points.row_size();
+
+	  // Block connectivity helper data
+	  m_implementation->create_blocks();
+
+	  m_implementation->create_nodes_distribution(nb_procs, rank);
+
+	  m_implementation->trigger_block_regions();
+
+	  typedef std::map< std::string, std::vector<Uint> > ElementsDistT;
+	  ElementsDistT elements_dist;
+	  for(Uint proc = 0; proc != nb_procs; ++proc)
+	  {
+		const Uint proc_begin = m_implementation->block_distribution[proc];
+		const Uint proc_end = m_implementation->block_distribution[proc+1];
+		Uint nb_elements = 0;
+		for(Uint block = proc_begin; block != proc_end; ++block)
+		{
+		  std::vector<Uint>& region_elements_dist = elements_dist[m_implementation->block_regions[block]];
+		  if(region_elements_dist.empty())
+			region_elements_dist.push_back(0);
+		  if(region_elements_dist.size() < proc + 2)
+			region_elements_dist.push_back(region_elements_dist.back());
+		  region_elements_dist.back() += m_implementation->block_list[block].nb_elems;
+		}
+	  }
+
+	  const Uint blocks_begin = m_implementation->block_distribution[rank];
+	  const Uint blocks_end = m_implementation->block_distribution[rank+1];
+
+	  Dictionary& geometry_dict = mesh.geometry_fields();
+
+	  std::map<std::string, Elements*> elements_map;
+	  for(ElementsDistT::const_iterator it = elements_dist.begin(); it != elements_dist.end(); ++it)
+	  {
+		const std::vector<Uint>& region_elements_dist = it->second;
+		Elements& volume_elements = mesh.topology().create_region(it->first).create_elements(dimensions == 3 ? "cf3.mesh.LagrangeP1.Hexa3D" : "cf3.mesh.LagrangeP1.Quad2D", geometry_dict);
+		volume_elements.resize(region_elements_dist[rank+1]-region_elements_dist[rank]);
+		elements_map[it->first] = &volume_elements;
+	  }
+
+	  // Set the connectivity, this also updates ghost node indices
+	  std::map<std::string, Uint> element_idx_map; // global element index per region
+	  for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
+	  {
+		m_implementation->add_block(block_subdivisions[block_idx], block_idx, elements_map[m_implementation->block_regions[block_idx]]->geometry_space().connectivity(), element_idx_map[m_implementation->block_regions[block_idx]]);
+	  }
+
+	  const Uint nodes_begin = m_implementation->nodes_dist[rank];
+	  const Uint nodes_end = m_implementation->nodes_dist[rank+1];
+	  const Uint nb_nodes_local = nodes_end - nodes_begin;
+	  
+	  // Fill the coordinate array
+		for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
+		{
+		  mesh.initialize_nodes(nb_nodes_local + m_implementation->ghost_counter, dimensions);
+		  Field& coordinates = mesh.geometry_fields().coordinates();
+		  if(dimensions == 3)
+			m_implementation->fill_block_coordinates_3d<Hexa3D>(coordinates, block_idx);
+		  if(dimensions == 2)
+			m_implementation->fill_block_coordinates_2d<Quad2D>(coordinates, block_idx);
+		}
+	  // Add surface patches
+	  for(Implementation::PatchMapT::const_iterator it = m_implementation->patch_map.begin(); it != m_implementation->patch_map.end(); ++it)
+	  {
+		m_implementation->add_patch
+		(
+		  it->first,
+		  mesh.topology().create_region(it->first).create_elements(dimensions == 3 ? "cf3.mesh.LagrangeP1.Quad3D" : "cf3.mesh.LagrangeP1.Line2D", geometry_dict)
+		);
+	  }
+
+	  // surface patches shouldn't have introduced new ghosts
+	  cf3_assert(coordinates.size() == nb_nodes_local + m_implementation->ghost_counter);
+
+	  if(PE::Comm::instance().is_active())
+	  {
+		common::List<Uint>& gids = mesh.geometry_fields().glb_idx(); gids.resize(nb_nodes_local + m_implementation->ghost_counter);
+		common::List<Uint>& ranks = mesh.geometry_fields().rank(); ranks.resize(nb_nodes_local + m_implementation->ghost_counter);
+
+		// Local nodes
+		for(Uint i = 0; i != nb_nodes_local; ++i)
+		{
+		  gids[i] = i + nodes_begin;
+		  ranks[i] = rank;
+		}
+
+		// Ghosts
+		for(Implementation::IndexMapT::const_iterator ghost_it = m_implementation->global_to_local.begin(); ghost_it != m_implementation->global_to_local.end(); ++ghost_it)
+		{
+		  const Uint global_id = ghost_it->first;
+		  const Uint local_id = ghost_it->second;
+		  gids[local_id] = global_id;
+		  ranks[local_id] = std::upper_bound(m_implementation->nodes_dist.begin(), m_implementation->nodes_dist.end(), global_id) - 1 - m_implementation->nodes_dist.begin();
+		}
+
+		mesh.geometry_fields().coordinates().parallelize_with(mesh.geometry_fields().comm_pattern());
+		mesh.geometry_fields().coordinates().synchronize();
+	  }
+	  else
+	  {
+		cf3_assert(m_implementation->ghost_counter == 0);
+	  }
+
+	  // Total number of elements on this rank
+	  Uint mesh_nb_elems = 0;
+	  boost_foreach(Elements& elements , find_components_recursively<Elements>(mesh))
+	  {
+		mesh_nb_elems += elements.size();
+	  }
+
+	  std::vector<Uint> nb_elements_accumulated;
+	  if(PE::Comm::instance().is_active())
+	  {
+		// Get the total number of elements on each rank
+		PE::Comm::instance().all_gather(mesh_nb_elems, nb_elements_accumulated);
+	  }
+	  else
+	  {
+		nb_elements_accumulated.push_back(mesh_nb_elems);
+	  }
+	  cf3_assert(nb_elements_accumulated.size() == nb_procs);
+	  // Sum up the values
+	  for(Uint i = 1; i != nb_procs; ++i)
+		nb_elements_accumulated[i] += nb_elements_accumulated[i-1];
+
+	  // Offset to start with for this rank
+	  Uint element_offset = rank == 0 ? 0 : nb_elements_accumulated[rank-1];
+
+	  // Update the element ranks and gids
+	  boost_foreach(Elements& elements , find_components_recursively<Elements>(mesh))
+	  {
+		const Uint nb_elems = elements.size();
+		elements.rank().resize(nb_elems);
+		elements.glb_idx().resize(nb_elems);
+
+		for (Uint elem=0; elem != nb_elems; ++elem)
+		{
+		  elements.rank()[elem] = rank;
+		  elements.glb_idx()[elem] = elem + element_offset;
+		}
+		element_offset += nb_elems;
+	  }
+
+	  mesh.update_structures();
+
+	  const Uint overlap = options().value<Uint>("overlap");
+	  if(overlap != 0 && PE::Comm::instance().size() > 1)
+	  {
+		mesh.block_mesh_changed(true); // avoid triggering mesh_changed before the load event is raised
+		MeshTransformer& grow_overlap = *Handle<MeshTransformer>(create_component("GrowOverlap", "cf3.mesh.actions.GrowOverlap"));
+		for(Uint i = 0; i != overlap; ++i)
+		  grow_overlap.transform(mesh);
+
+		mesh.geometry_fields().remove_component("CommPattern");
+		mesh.block_mesh_changed(false);
+	  }
+	  mesh.raise_mesh_loaded();
+  } else { //nurbs is enabled
+		if (m_implementation->nurbs->validate() == -1)
+			throw SetupError(FromHere(), "Nurbs definition incorrect: Not cubic matrix definition of points");
+		if (m_implementation->nurbs->validate() > 0)
+			throw SetupError(FromHere(), "Nurbs definition incorrect: Incorrect knot vetors");
+		m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");
 		
-  const Table<Real>& points = *m_implementation->points;
-  const Table<Uint>& blocks = *m_implementation->blocks;
-  const Table<Uint>& block_subdivisions =  *m_implementation->block_subdivisions;
-
-  common::Timer timer;
-
-  // Make sure the block connectivity mesh is up-to-date
-  create_block_mesh();
-	exit(0);
-  const Uint nb_procs = PE::Comm::instance().size();
-  const Uint rank = PE::Comm::instance().rank();
-  const Uint dimensions = points.row_size();
-
-  // Block connectivity helper data
-  m_implementation->create_blocks();
-
-  m_implementation->create_nodes_distribution(nb_procs, rank);
-
-  m_implementation->trigger_block_regions();
-
-  typedef std::map< std::string, std::vector<Uint> > ElementsDistT;
-  ElementsDistT elements_dist;
-  for(Uint proc = 0; proc != nb_procs; ++proc)
-  {
-    const Uint proc_begin = m_implementation->block_distribution[proc];
-    const Uint proc_end = m_implementation->block_distribution[proc+1];
-    Uint nb_elements = 0;
-    for(Uint block = proc_begin; block != proc_end; ++block)
-    {
-      std::vector<Uint>& region_elements_dist = elements_dist[m_implementation->block_regions[block]];
-      if(region_elements_dist.empty())
-        region_elements_dist.push_back(0);
-      if(region_elements_dist.size() < proc + 2)
-        region_elements_dist.push_back(region_elements_dist.back());
-      region_elements_dist.back() += m_implementation->block_list[block].nb_elems;
-    }
+	  const Uint dimensions = (*m_implementation->points).row_size();
+	  
+		//fill the block coordinates
+		Region& region = mesh.topology().create_region("fluid");
+		Uint points_count = (1 + m_implementation->nurbs->Knots[0][m_implementation->nurbs->Knots[0].size()-1] / m_implementation->nurbs_param[0]) *
+			   (1+((m_implementation->nurbs_param[1]==0)?1:(m_implementation->nurbs->Knots[1][m_implementation->nurbs->Knots[1].size()-1] / m_implementation->nurbs_param[1]))) *
+			   (1+((m_implementation->nurbs_param[2]==0)?1:(m_implementation->nurbs->Knots[2][m_implementation->nurbs->Knots[2].size()-1] / m_implementation->nurbs_param[2])));
+		
+		mesh.initialize_nodes(points_count, dimensions);
+		Field& coordinates = mesh.geometry_fields().coordinates();
+		m_implementation->nurbs->InitNurbs();  
+		
+		m_implementation->fill_block_nurbs_coordinates(coordinates);		
   }
-
-  const Uint blocks_begin = m_implementation->block_distribution[rank];
-  const Uint blocks_end = m_implementation->block_distribution[rank+1];
-
-  Dictionary& geometry_dict = mesh.geometry_fields();
-
-  std::map<std::string, Elements*> elements_map;
-  for(ElementsDistT::const_iterator it = elements_dist.begin(); it != elements_dist.end(); ++it)
-  {
-    const std::vector<Uint>& region_elements_dist = it->second;
-    Elements& volume_elements = mesh.topology().create_region(it->first).create_elements(dimensions == 3 ? "cf3.mesh.LagrangeP1.Hexa3D" : "cf3.mesh.LagrangeP1.Quad2D", geometry_dict);
-    volume_elements.resize(region_elements_dist[rank+1]-region_elements_dist[rank]);
-    elements_map[it->first] = &volume_elements;
-  }
-
-  // Set the connectivity, this also updates ghost node indices
-  std::map<std::string, Uint> element_idx_map; // global element index per region
-  for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
-  {
-    m_implementation->add_block(block_subdivisions[block_idx], block_idx, elements_map[m_implementation->block_regions[block_idx]]->geometry_space().connectivity(), element_idx_map[m_implementation->block_regions[block_idx]]);
-  }
-
-  const Uint nodes_begin = m_implementation->nodes_dist[rank];
-  const Uint nodes_end = m_implementation->nodes_dist[rank+1];
-  const Uint nb_nodes_local = nodes_end - nodes_begin;
-
-  // Initialize coordinates
-
-  // Fill the coordinate array
-  if (m_implementation->nurbs_enabled) {
-    Uint points_count = m_implementation->nurbs->Knots[0][m_implementation->nurbs->Knots[0].size()-1] / m_implementation->nurbs_param[0] +
-           m_implementation->nurbs->Knots[1][m_implementation->nurbs->Knots[1].size()-1] / m_implementation->nurbs_param[1] +
-           m_implementation->nurbs->Knots[2][m_implementation->nurbs->Knots[2].size()-1] / m_implementation->nurbs_param[2];
-    mesh.initialize_nodes(points_count, dimensions);
-    Field& coordinates = mesh.geometry_fields().coordinates();
-    m_implementation->nurbs->InitNurbs();  
-    m_implementation->fill_block_nurbs_coordinates(coordinates);
-  } else {
-    for(Uint block_idx = blocks_begin; block_idx != blocks_end; ++block_idx)
-    {
-      mesh.initialize_nodes(nb_nodes_local + m_implementation->ghost_counter, dimensions);
-      Field& coordinates = mesh.geometry_fields().coordinates();
-      if(dimensions == 3)
-        m_implementation->fill_block_coordinates_3d<Hexa3D>(coordinates, block_idx);
-      if(dimensions == 2)
-        m_implementation->fill_block_coordinates_2d<Quad2D>(coordinates, block_idx);
-    }
-  }
-  // Add surface patches
-  for(Implementation::PatchMapT::const_iterator it = m_implementation->patch_map.begin(); it != m_implementation->patch_map.end(); ++it)
-  {
-    m_implementation->add_patch
-    (
-      it->first,
-      mesh.topology().create_region(it->first).create_elements(dimensions == 3 ? "cf3.mesh.LagrangeP1.Quad3D" : "cf3.mesh.LagrangeP1.Line2D", geometry_dict)
-    );
-  }
-
-  // surface patches shouldn't have introduced new ghosts
-  cf3_assert(coordinates.size() == nb_nodes_local + m_implementation->ghost_counter);
-
-  if(PE::Comm::instance().is_active())
-  {
-    common::List<Uint>& gids = mesh.geometry_fields().glb_idx(); gids.resize(nb_nodes_local + m_implementation->ghost_counter);
-    common::List<Uint>& ranks = mesh.geometry_fields().rank(); ranks.resize(nb_nodes_local + m_implementation->ghost_counter);
-
-    // Local nodes
-    for(Uint i = 0; i != nb_nodes_local; ++i)
-    {
-      gids[i] = i + nodes_begin;
-      ranks[i] = rank;
-    }
-
-    // Ghosts
-    for(Implementation::IndexMapT::const_iterator ghost_it = m_implementation->global_to_local.begin(); ghost_it != m_implementation->global_to_local.end(); ++ghost_it)
-    {
-      const Uint global_id = ghost_it->first;
-      const Uint local_id = ghost_it->second;
-      gids[local_id] = global_id;
-      ranks[local_id] = std::upper_bound(m_implementation->nodes_dist.begin(), m_implementation->nodes_dist.end(), global_id) - 1 - m_implementation->nodes_dist.begin();
-    }
-
-    mesh.geometry_fields().coordinates().parallelize_with(mesh.geometry_fields().comm_pattern());
-    mesh.geometry_fields().coordinates().synchronize();
-  }
-  else
-  {
-    cf3_assert(m_implementation->ghost_counter == 0);
-  }
-
-  // Total number of elements on this rank
-  Uint mesh_nb_elems = 0;
-  boost_foreach(Elements& elements , find_components_recursively<Elements>(mesh))
-  {
-    mesh_nb_elems += elements.size();
-  }
-
-  std::vector<Uint> nb_elements_accumulated;
-  if(PE::Comm::instance().is_active())
-  {
-    // Get the total number of elements on each rank
-    PE::Comm::instance().all_gather(mesh_nb_elems, nb_elements_accumulated);
-  }
-  else
-  {
-    nb_elements_accumulated.push_back(mesh_nb_elems);
-  }
-  cf3_assert(nb_elements_accumulated.size() == nb_procs);
-  // Sum up the values
-  for(Uint i = 1; i != nb_procs; ++i)
-    nb_elements_accumulated[i] += nb_elements_accumulated[i-1];
-
-  // Offset to start with for this rank
-  Uint element_offset = rank == 0 ? 0 : nb_elements_accumulated[rank-1];
-
-  // Update the element ranks and gids
-  boost_foreach(Elements& elements , find_components_recursively<Elements>(mesh))
-  {
-    const Uint nb_elems = elements.size();
-    elements.rank().resize(nb_elems);
-    elements.glb_idx().resize(nb_elems);
-
-    for (Uint elem=0; elem != nb_elems; ++elem)
-    {
-      elements.rank()[elem] = rank;
-      elements.glb_idx()[elem] = elem + element_offset;
-    }
-    element_offset += nb_elems;
-  }
-
-  mesh.update_structures();
-
-  const Uint overlap = options().value<Uint>("overlap");
-  if(overlap != 0 && PE::Comm::instance().size() > 1)
-  {
-    mesh.block_mesh_changed(true); // avoid triggering mesh_changed before the load event is raised
-    MeshTransformer& grow_overlap = *Handle<MeshTransformer>(create_component("GrowOverlap", "cf3.mesh.actions.GrowOverlap"));
-    for(Uint i = 0; i != overlap; ++i)
-      grow_overlap.transform(mesh);
-
-    mesh.geometry_fields().remove_component("CommPattern");
-    mesh.block_mesh_changed(false);
-  }
-  mesh.raise_mesh_loaded();
 }
 
 void BlockArrays::index_points3D(const int index, const Real weight, const int x, const int y, const int z)
 {
 	const Table<Real>& points = *m_implementation->points;
 	m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");	
-	if (index < 0 || index >= m_implementation-> points)
+	if (index < 0)
+		throw SetupError(FromHere(), "Arguments passed to index_points is negative");	
 	m_implementation->nurbs->AddPoint(points[index], weight, z, y, x);
 }
 
@@ -1864,8 +1881,8 @@ void BlockArrays::index_points2D(const int index, const Real weight, const int x
 {
 	const Table<Real>& points = *m_implementation->points;
 	m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");	
-	if (index < 0 || index >= m_implementation-> points)
-		throw SetupError(FromHere(), "Arguments passed to index_points is out of range of points");	
+	if (index < 0)
+		throw SetupError(FromHere(), "Arguments passed to index_points is negative");	
 	m_implementation->nurbs->AddPoint(points[index], weight, 0, y, x);
 }
 

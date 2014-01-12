@@ -68,4 +68,4 @@ mesh = root.create_component('Mesh', 'cf3.mesh.Mesh')
 
 nurbs.create_mesh(mesh.uri())
 
-mesh.write_mesh(file=cf.URI('nurbs_circle.pvtu'))
+mesh.write_mesh(file=cf.URI('nurbs_circle.msh'))

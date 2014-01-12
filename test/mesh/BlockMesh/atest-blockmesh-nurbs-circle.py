@@ -20,7 +20,7 @@ nurbs = root.create_component('model', 'cf3.mesh.BlockMesh.BlockArrays')
 
 nurbs.init_nurbs(u = 0.01, v = 0, w = 0) #doesnt have to move in second and third direction
 
-points = nurbs.create_points(dimensions = 2, nb_points = 8)
+points = nurbs.create_points(dimensions = 2, nb_points = 9)
 points[0] = [  0,  0 ]
 points[1] = [  1,  1 ]
 points[2] = [  0,  1 ]
@@ -49,6 +49,6 @@ nurbs.add_knot_vector(knot = [0,0,0, pi/2, pi/2, pi, pi, 3*pi/2, 3*pi/2, 2*pi, 2
 # Generate a channel mesh
 mesh = root.create_component('Mesh', 'cf3.mesh.Mesh')
 
-blocks.create_mesh(mesh.uri())
+nurbs.create_mesh(mesh.uri())
 
-mesh.write_mesh(file=cf.URI('nurbs_parabolic_surface.pvtu'))
+mesh.write_mesh(file=cf.URI('nurbs_circle.msh'))
