@@ -1529,7 +1529,6 @@ Handle< Mesh > BlockArrays::create_block_mesh()
       block_ranks[field_idx][0] = part;
     }
   }
-  exit(0);
   return m_implementation->block_mesh;
 }
 
@@ -1865,6 +1864,7 @@ void BlockArrays::create_mesh(Mesh& mesh)
 		m_implementation->nurbs->InitNurbs();  
 		
 		m_implementation->fill_block_nurbs_coordinates(coordinates);		
+
   }
 }
 
