@@ -34,9 +34,6 @@ points[13] = [ 15, 5, 5 ];
 points[14] = [ 15, 5, -5 ];
 points[15] = [ 15, 0, -15 ];
 
-block_nodes = nurbs.create_blocks(1)
-block_nodes[0] = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15]
-
 #index points into NURBS matrix and add weights
 #first row
 nurbs.index_points3D(index = 0, weight = 1, x = 0, y = 0, z = 0)
@@ -68,4 +65,4 @@ mesh = root.create_component('Mesh', 'cf3.mesh.Mesh')
 
 nurbs.create_mesh(mesh.uri())
 
-mesh.write_mesh(file=cf.URI('nurbs_circle.msh'))
+mesh.write_mesh(file=cf.URI('nurbs_parabolic_surface.msh'))

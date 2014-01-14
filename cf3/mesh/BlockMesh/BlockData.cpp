@@ -1864,8 +1864,8 @@ void BlockArrays::create_mesh(Mesh& mesh)
 		m_implementation->nurbs->InitNurbs();  
 		
 		m_implementation->fill_block_nurbs_coordinates(coordinates);		
-
-  }
+		
+	}
 }
 
 void BlockArrays::index_points3D(const int index, const Real weight, const int x, const int y, const int z)
