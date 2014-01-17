@@ -27,8 +27,6 @@
 #include "mesh/BlockMesh/BlockData.hpp"
 #include "mesh/BlockMesh/NurbsEvaluation.hpp"
 
-#include <fstream>
-
 #include "mesh/Cells.hpp"
 #include "mesh/Elements.hpp"
 #include "mesh/Mesh.hpp"
@@ -624,9 +622,8 @@ struct BlockArrays::Implementation
     }
   }
 
-  void fill_block_nurbs_coordinates(Table<Real>& mesh_coords) {
-		
-    int i=0;																		//counter of points
+  void fill_block_nurbs_coordinates(Table<Real>& mesh_coords, Uint dim) {
+    Uint i=0;						//counter of points
     Real u_step = nurbs_param[0];
     Real v_step = nurbs_param[1];
     Real w_step = nurbs_param[2];
@@ -635,24 +632,30 @@ struct BlockArrays::Implementation
 			v_step = nurbs->Knots[1][nurbs->Knots[1].size()-1];
     if (w_step == 0)
 			w_step = nurbs->Knots[2][nurbs->Knots[2].size()-1];
-		
+	Real eps = 1e-8; //precision for floating point comparison
 	
-    for (float u=0; u <= nurbs->Knots[0][nurbs->Knots[0].size()-1]; u+=u_step ) {
-      for(float v=0; v <= ((nurbs->Points[0].size() == 1)?0:(nurbs->Knots[1][nurbs->Knots[1].size()-1])); v+=v_step) {
-        for (float w=0; w <= ((nurbs->Points.size() == 1)?0:(nurbs->Knots[2][nurbs->Knots[2].size()-1])); w+=w_step) {
+	Real u_end = nurbs->Knots[0][nurbs->Knots[0].size()-1];
+	Real v_end = ((nurbs->Points[0].size() == 1)?0:(nurbs->Knots[1][nurbs->Knots[1].size()-1]));
+	Real w_end = ((nurbs->Points.size() == 1)?0:(nurbs->Knots[2][nurbs->Knots[2].size()-1]));
+    for (float w=0; w - w_end < eps; w+=w_step ) {
+      for (float v=0; v - v_end < eps; v+=v_step) {
+        for (float u=0; u - u_end < eps; u+=u_step) {
           Real Out[3]={0,0,0};
+          
           std::vector <Real> param;
           param.push_back(u);
           param.push_back(v);
           param.push_back(w);
-          nurbs->GetOutpoint(param, Out);
           
+          nurbs->GetOutpoint(param, Out);
           mesh_coords[i][XX] = Out[0];
-          mesh_coords[i++][YY] = Out[1];
+          mesh_coords[i][YY] = Out[1];
+          if (dim == 3)
+			mesh_coords[i][ZZ] = Out[2];
+		  i++;
         }
       }   
-    }
-    
+    }  
   }
 
   void add_patch(const std::string& name, Elements& patch_elems)
@@ -1851,20 +1854,23 @@ void BlockArrays::create_mesh(Mesh& mesh)
 			throw SetupError(FromHere(), "Nurbs definition incorrect: Incorrect knot vetors");
 		m_implementation->check_handle(m_implementation->points, "create_points", "Points definition");
 		
-	  const Uint dimensions = (*m_implementation->points).row_size();
+		const Table<Real>& points = *m_implementation->points;
+		const Uint dimensions = points.row_size();
 	  
 		//fill the block coordinates
 		Region& region = mesh.topology().create_region("fluid");
-		Uint points_count = (1 + m_implementation->nurbs->Knots[0][m_implementation->nurbs->Knots[0].size()-1] / m_implementation->nurbs_param[0]) *
-			   (1+((m_implementation->nurbs_param[1]==0)?1:(m_implementation->nurbs->Knots[1][m_implementation->nurbs->Knots[1].size()-1] / m_implementation->nurbs_param[1]))) *
-			   (1+((m_implementation->nurbs_param[2]==0)?1:(m_implementation->nurbs->Knots[2][m_implementation->nurbs->Knots[2].size()-1] / m_implementation->nurbs_param[2])));
+		Uint points_count = (1+m_implementation->nurbs->Knots[0][m_implementation->nurbs->Knots[0].size()-1] / m_implementation->nurbs_param[0]) *
+			   ((m_implementation->nurbs_param[1]==0)?1:(1+(m_implementation->nurbs->Knots[1][m_implementation->nurbs->Knots[1].size()-1] / m_implementation->nurbs_param[1]))) *
+			   ((m_implementation->nurbs_param[2]==0)?1:(1+(m_implementation->nurbs->Knots[2][m_implementation->nurbs->Knots[2].size()-1] / m_implementation->nurbs_param[2])));
 		
-		mesh.initialize_nodes(points_count, dimensions);
+		m_implementation->nurbs->InitNurbs(); 
+		
 		Field& coordinates = mesh.geometry_fields().coordinates();
-		m_implementation->nurbs->InitNurbs();  
+		mesh.initialize_nodes(points_count, dimensions, dimensions);
 		
-		m_implementation->fill_block_nurbs_coordinates(coordinates);		
+		m_implementation->fill_block_nurbs_coordinates(coordinates, dimensions);	
 		
+		//mesh.raise_mesh_loaded();
 	}
 }
 
