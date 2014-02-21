@@ -89,6 +89,7 @@ public: // functions
 
   /// will among others set the coordinate dimension for the nodes
   void initialize_nodes(const Uint nb_nodes, const Uint dimension);
+  void initialize_nodes(const Uint nb_nodes, const Uint dimension, const Uint dimensionality);
 
   bool check_sanity() const;
   bool check_sanity(std::vector<std::string>& messages) const;

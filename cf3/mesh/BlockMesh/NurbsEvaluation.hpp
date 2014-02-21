@@ -27,7 +27,7 @@ public:
   ~NurbsEvaluation();
 
   static std::string type_name () { return "NurbsEvalution"; }
-  
+
   /// compute the values of each coordinate
   /// @param param - vector of parameters u, v, w
   /// @param OutPoint - coordinetes of the result point
@@ -48,20 +48,21 @@ public:
   void SetDimension(int dimension);
   /// validate all values of nurbs definition
   int validate();
-  
+
   std::vector<std::vector<Real> >Knots;
   std::vector<std::vector<std::vector<std::vector<Real> > > >Points;
-  
+  std::vector<std::vector<std::vector<Uint> > > Relations;
+
 private:
   std::vector<unsigned int>order;
   std::vector<std::vector<std::vector<Real> > >Weights;
   std::vector<unsigned int> num_points;
   int dim;
-  
+
   /// Compute the basis function for NURBS by Cox De-boor algorithm
   /// @param param - vector of parameters u, v, w
   /// @param i - index of computed bases
-  /// @param dimension - direction of table block curve(0, 1, 2) 
+  /// @param dimension - direction of table block curve(0, 1, 2)
   /// @param order - orders of the curve in each direction
   /// @param Knots - knot vectors for the curve in each direction
   Real CoxDeBoor(std::vector<Real> param, unsigned int i, int dimension, std::vector<unsigned int>order);
@@ -70,7 +71,7 @@ private:
   /// @param param - vector of parameters u, v, w
   /// @param index - index of computed bases
   Real BSplineBasis(std::vector<Real> param, std::vector<unsigned int> index);
- 
+
 
 };
 

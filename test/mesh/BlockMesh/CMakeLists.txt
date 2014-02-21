@@ -51,3 +51,8 @@ coolfluid_add_test(ATEST atest-blockmesh-nurbs-parabolic-surface
 
 coolfluid_add_test(ATEST atest-blockmesh-nurbs-circle
                    PYTHON atest-blockmesh-nurbs-circle.py)
+
+################################################################################
+
+coolfluid_add_test(ATEST atest-blockmesh-nurbs-curved-2D-surface
+                   PYTHON atest-blockmesh-nurbs-curved-2D-surface.py)

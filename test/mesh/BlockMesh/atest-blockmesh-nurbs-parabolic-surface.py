@@ -63,7 +63,7 @@ nurbs.add_knot_vector(knot = [0,0,0,1,2,2,2])
 
 #doesnt have to move in third direction
 #initialize nurbs
-nurbs.init_nurbs(u = 0.01, v = 0.01, w = 0) 
+nurbs.init_nurbs(u = 0.01, v = 0.01, w = 0)
 # Generate a channel mesh
 mesh = root.create_component('Mesh', 'cf3.mesh.Mesh')
 
@@ -84,4 +84,4 @@ ax = Axes3D(fig)
 ax.scatter(X, Y, Z)
 pyplot.show()
 
-mesh.write_mesh(file=cf.URI('nurbs_parabolic_surface.vtk'))
+mesh.write_mesh(file=cf.URI('nurbs_parabolic_surface.msh'))

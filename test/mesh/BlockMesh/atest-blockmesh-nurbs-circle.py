@@ -64,4 +64,4 @@ pl.axis('image')
 pl.grid()
 pl.show()
 
-mesh.write_mesh(file=cf.URI('nurbs_circle.vtk'))
+mesh.write_mesh(file=cf.URI('nurbs_circle.pvtu'))

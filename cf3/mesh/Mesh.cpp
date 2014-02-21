@@ -144,6 +144,13 @@ void Mesh::initialize_nodes(const Uint nb_nodes, const Uint dimension)
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void Mesh::initialize_nodes(const Uint nb_nodes, const Uint dimension, const Uint dimensionality)
+{
+  m_dimensionality = dimensionality;
+  initialize_nodes(nb_nodes, dimension);
+}
+////////////////////////////////////////////////////////////////////////////////
+
 void Mesh::update_structures()
 {
   Uint entities_idx=0;
