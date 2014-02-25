@@ -1906,8 +1906,8 @@ void BlockArrays::create_mesh(Mesh& mesh)
                 Table<Uint>::Row nodes = connectivity[offset+point++];
                 nodes[0] = Relations[i][j][k];
                 nodes[1] = Relations[i+1][j][k];
-                nodes[3] = Relations[i+1][j+1][k];
-                nodes[2] = Relations[i][j+1][k];
+                nodes[3] = Relations[i][j+1][k];
+                nodes[2] = Relations[i+1][j+1][k];
             }
 
     offset = x_segments*y_segments*(z_segments+1);
@@ -1919,8 +1919,8 @@ void BlockArrays::create_mesh(Mesh& mesh)
                 Table<Uint>::Row nodes = connectivity[offset+point++];
                 nodes[0] = Relations[i][k][j];
                 nodes[1] = Relations[i+1][k][j];
-                nodes[3] = Relations[i+1][k][j+1];
-                nodes[2] = Relations[i][k][j+1];
+                nodes[3] = Relations[i][k][j+1];
+                nodes[2] = Relations[i+1][k][j+1];
             }
     offset = x_segments*y_segments*(z_segments+1) +
                   x_segments*(y_segments+1)*z_segments;
@@ -1934,8 +1934,8 @@ void BlockArrays::create_mesh(Mesh& mesh)
                 Table<Uint>::Row nodes = connectivity[offset+point++];
                 nodes[0] = Relations[k][i][j];
                 nodes[1] = Relations[k][i+1][j];
-                nodes[3] = Relations[k][i+1][j+1];
-                nodes[2] = Relations[k][i][j+1];
+                nodes[3] = Relations[k][i][j+1];
+                nodes[2] = Relations[k][i+1][j+1];
             }
     mesh.raise_mesh_loaded();
     }
